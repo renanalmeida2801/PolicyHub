@@ -1,0 +1,14 @@
+- name: aluno_pode_submeter_projeto
+  action: SUBMETER_PROJETO
+  resource: PROJETO
+  conditions:
+    roles: ["aluno"]
+    prazo_expirado: false
+  decision: PERMIT
+
+- name: projeto_com_prazo_expirado
+  action: SUBMETER_PROJETO
+  resource: PROJETO
+  conditions:
+    prazo_expirado: true
+  decision: DENY
