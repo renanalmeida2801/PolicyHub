@@ -10,3 +10,10 @@ class PolicyRequest(BaseModel):
     action: str
     resource: str
     context: Dict[str, Any]
+
+class PolicyDefinition(BaseModel):
+    name: str
+    action: str
+    resource: str
+    conditions: Dict[str, Any]
+    decision: str

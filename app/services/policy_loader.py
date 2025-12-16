@@ -1,8 +1,15 @@
 import yaml
 from pathlib import Path
 
-def load_policies():
-    policy_path = Path("policies/access_policies.yaml")
+POLICE_FILE = Path("policies/access_policies.yaml")
 
-    with open(policy_path, "r") as file:
+def load_policies():
+    if not POLICE_FILE.exists():
+        return []
+
+    with open(POLICE_FILE, "r") as file:
         return yaml.safe_load(file)
+    
+def save_policies(policies: list):
+    with open(POLICE_FILE, "w") as file:
+        yaml.safe_dump(policies, file, default_flow_style=False, sort_keys=False, allow_unicode=True)

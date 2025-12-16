@@ -2,13 +2,21 @@
   action: SUBMETER_PROJETO
   resource: PROJETO
   conditions:
-    roles: ["aluno"]
+    roles:
+    - aluno
     prazo_expirado: false
   decision: PERMIT
-
-- name: projeto_com_prazo_expirado
+- name: submeter_projeto_prazo_expirado
   action: SUBMETER_PROJETO
   resource: PROJETO
   conditions:
     prazo_expirado: true
   decision: DENY
+- name: gerente_financeiro_aprova
+  action: APROVAR_PAGAMENTO
+  resource: FINANCEIRO
+  conditions:
+    roles:
+    - gerente
+    departamento: financeiro
+  decision: PERMIT
