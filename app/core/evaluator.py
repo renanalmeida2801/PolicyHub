@@ -1,21 +1,14 @@
-from app.resilience.circuit_breaker import policy_circuit_breaker
-import pybreaker
-
 class PolicyEvaluator:
     def __init__(self, policies: list):
         self.policies = policies
     
     def evaluate(self, request):
-        try:
-            return policy_circuit_breaker.call(self._evaluate_internal, request)
-        except pybreaker.CircuitBreakerError:
-            return "DENY"
+        return self._evaluate_internal(request)
 
     def _evaluate_internal(self, request):
         for policy in self.policies:
             if self._matches(policy, request):
                 return policy["decision"]
-            
         return "DENY"
 
     def _matches(self, policy, request):

@@ -7,6 +7,10 @@ from app.models.response_models import PolicyResponse
 from app.services.policy_loader import load_policies, save_policies
 from app.core.evaluator import PolicyEvaluator
 
+from app.audit.auditor import Auditor
+from app.audit.models import AuditEvent
+from app.resilience.circuit_breaker import circuit_breaker
+
 router = APIRouter()
 
 policies = load_policies()
@@ -20,11 +24,43 @@ def refresh_evaluator():
 
 @router.post("/evaluate", response_model=PolicyResponse)
 def evaluate_policy(request: PolicyRequest):
-    decision = evaluator.evaluate(request)
+    try:
+        @circuit_breaker
+        def protected_evaluate():
+            return evaluator.evaluate(request)
+        
+        decision = protected_evaluate()
 
-    if isinstance(decision, dict):
-        return {"decision": decision["decision"]}
-    return {"decision": decision}
+        decision_value = decision["decision"] if isinstance(decision, dict) else decision
+
+        Auditor.log(
+            AuditEvent(
+                user_id=request.user.id,
+                resource=request.resource,
+                action=request.action,
+                decision=decision_value,
+                reason=decision.get("reason") if isinstance(decision, dict) else None,
+                circuit_state=circuit_breaker.current_state().value,
+                retries=0
+            )
+        )
+
+        return {"decision": decision_value}
+    
+    except Exception as e:
+        Auditor.log(
+            AuditEvent(
+                user_id=request.user.id,
+                resource=request.resource,
+                action=request.action,
+                decision="DENY",
+                reason=str(e),
+                circuit_state=circuit_breaker.current_state().value,
+                retries=0
+            )
+        )
+
+        raise HTTPException(status_code=503, detail="Serviço temporariamente indisponível")
 
 @router.get("/policies", response_model=List[Dict[str, Any]])
 def list_policies():
@@ -47,14 +83,39 @@ def create_policy(policy: PolicyDefinition):
     policies.append(policy.model_dump())
     refresh_evaluator()
 
+    Auditor.log(
+        AuditEvent(
+            user_id="ADMIN",
+            resource="policy",
+            action="CREATE",
+            decision="ALLOW",
+            reason=f"Política {policy.name} criada",
+            circuit_state="N/A",
+            retries=0
+        )
+    )
+
     return {"message": "Política criada com sucesso.", "policy": policy}
 
-@router.put("/policies.{policy_name}")
+@router.put("/policies/{policy_name}")
 def update_policy(policy_name: str, policy_update: PolicyDefinition):
     for index, policy in enumerate(policies):
         if policy["name"] == policy_name:
             policies[index] = policy_update.model_dump()
             refresh_evaluator()
+
+            Auditor.log(
+                AuditEvent(
+                    user_id="ADMIN",
+                    resource="policy",
+                    action="UPDATE",
+                    decision="ALLOW",
+                    reason=f"Política {policy_name} atualizada",
+                    circuit_state="N/A",
+                    retries=0
+                )
+            )
+
             return {"meesage": "Política atualizada com sucesso.", "policy": policy_update}
         
     raise HTTPException(status_code=404, detail="Política não encontrada.")
@@ -72,4 +133,20 @@ def delete_policy(policy_name: str):
         raise HTTPException(status_code=404, detail="Política não encontrada.")
     
     refresh_evaluator()
+
+    Auditor.log(
+        AuditEvent(
+            user_id="ADMIN",
+            resource="policy",
+            action="DELETE",
+            decision="ALLOW",
+            reason=f"Política {policy_name} removida",
+            circuit_state="N/A",
+            retries=0
+        )
+    )
     return {"message": "Política deletada com sucesso."}
+
+@router.get("/audit/logs", response_model=List[AuditEvent])
+def get_audit_logs():
+    return Auditor.list_events()
