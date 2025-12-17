@@ -20,3 +20,27 @@
     - gerente
     departamento: financeiro
   decision: PERMIT
+- name: acesso_servidor_restrito
+  action: SSH_LOGIN
+  resource: SERVIDOR_PROD
+  conditions:
+    departamento:
+      operator: in
+      value:
+      - infra
+      - devops
+      - cto
+  decision: PERMIT
+- name: cancelamento_padrao_cliente
+  action: CANCEL_APPOINTMENT
+  resource: APPOINTMENT
+  conditions:
+    roles:
+    - customer_r
+    horas_restantes:
+      operator: gt
+      value: 24
+    cancelamentos_mes_atual:
+      operator: lt
+      value: 3
+  decision: PERMIT
